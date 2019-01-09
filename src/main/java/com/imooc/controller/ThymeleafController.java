@@ -31,7 +31,7 @@ public class ThymeleafController {
         User u = new User();
         u.setName("superadmin");
         u.setAge(10);
-        u.setPassword("123465");
+        u.setPassword("123456");
         u.setBirthday(new Date());
         u.setDesc("<font color='green'><b>hello imooc</b></font>");
 

@@ -13,6 +13,7 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.OutputStream;
 import java.util.Hashtable;
+import java.util.Map;
 import java.util.Random;
 
 public class QRcodeUtil2 {
@@ -265,13 +266,20 @@ public class QRcodeUtil2 {
     }
 
     public static void main(String[] args) throws Exception {
-        String text = "https://blog.csdn.net/ianly123";
+//        String text = "https://blog.csdn.net/ianly123";
+        String text = "{\"queryParamJson\":{\"omsBillNum\":\"\",\"applyNum\":\"\",\"confirmNum\":\"\",\"timeType\":\"apply_generate_time\",\"minTime\":\"2018-08-25 10:25:10\",\"maxTime\":\"2018-09-25 10:25:10\",\"sortField\":\"apply_generate_time\",\"billStatus\":\"2001\"}}";
         //不含Logo  
 //        QRcodeUtil2.encode(text, null, "F:/", true);
+        //解码
+        String decode = QRcodeUtil2.decode("F:/34165474.jpg");
+        Map<String,Object> requestParamMap = CommonUtil.parseJsonParam(decode);
+//        Object obj = requestParamMap.get("queryParamJson");
+//
+        System.out.println(requestParamMap.get("queryParamJson"));
         //含Logo，不指定二维码图片名  
         //QRcodeUtil2.encode(text, "/Users/ianly/Documents/picture/google-icon.jpg", "/Users/ianly/Documents/picture/", true);
         //含Logo，指定二维码图片名  
-        QRcodeUtil2.encode(text, "F:/851632560576675855.jpg", "F:/", "qrcode", true);
+//        QRcodeUtil2.encode(text, "F:/851632560576675855.jpg", "F:/", "qrcode", true);
     }
 
 }
