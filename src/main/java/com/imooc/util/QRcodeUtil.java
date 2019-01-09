@@ -1,89 +1,285 @@
 package com.imooc.util;
 
-import com.google.zxing.BarcodeFormat;
-import com.google.zxing.EncodeHintType;
-import com.google.zxing.MultiFormatWriter;
-import com.google.zxing.WriterException;
-import com.google.zxing.client.j2se.MatrixToImageWriter;
+import com.google.zxing.*;
+import com.google.zxing.client.j2se.BufferedImageLuminanceSource;
 import com.google.zxing.common.BitMatrix;
+import com.google.zxing.common.HybridBinarizer;
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
-import sun.misc.BASE64Encoder;
 
 import javax.imageio.ImageIO;
+import java.awt.*;
+import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.IOException;
-import java.nio.file.Path;
-import java.util.HashMap;
+import java.io.OutputStream;
 import java.util.Hashtable;
-
-import static com.google.zxing.client.j2se.MatrixToImageWriter.toBufferedImage;
+import java.util.Map;
+import java.util.Random;
 
 public class QRcodeUtil {
 
-    public static String creatRrCode(String contents, int width, int height) {
-        String binary = null;
-        Hashtable hints = new Hashtable();
-        hints.put(EncodeHintType.CHARACTER_SET, "utf-8");
-        try {
-            BitMatrix bitMatrix = new MultiFormatWriter().encode(
-                    contents, BarcodeFormat.QR_CODE, width, height, hints);
-            // 1、读取文件转换为字节数组
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            BufferedImage image = toBufferedImage(bitMatrix);
-            //转换成png格式的IO流
-            ImageIO.write(image, "png", out);
-            byte[] bytes = out.toByteArray();
+    private static final String CHARSET = "utf-8";
+    private static final String FORMAT = "JPG";
+    // 二维码尺寸
+    private static final int QRCODE_SIZE = 300;
+    // LOGO宽度
+    private static final int LOGO_WIDTH = 60;
+    // LOGO高度
+    private static final int LOGO_HEIGHT = 60;
 
-            // 2、将字节数组转为二进制
-            BASE64Encoder encoder = new BASE64Encoder();
-            binary = encoder.encodeBuffer(bytes).trim();
-        } catch (WriterException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        } catch (IOException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-        return binary;
-    }
-
-    /**
-     * image流数据处理
-     *
-     */
-    public static BufferedImage toBufferedImage(BitMatrix matrix) {
-        int width = matrix.getWidth();
-        int height = matrix.getHeight();
+    private static BufferedImage createImage(String content, String logoPath, boolean needCompress) throws Exception {
+        Hashtable<EncodeHintType, Object> hints = new Hashtable<EncodeHintType, Object>();
+        hints.put(EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.H);
+        hints.put(EncodeHintType.CHARACTER_SET, CHARSET);
+        hints.put(EncodeHintType.MARGIN, 1);
+        BitMatrix bitMatrix = new MultiFormatWriter().encode(content, BarcodeFormat.QR_CODE, QRCODE_SIZE, QRCODE_SIZE,
+                hints);
+        int width = bitMatrix.getWidth();
+        int height = bitMatrix.getHeight();
         BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
-                image.setRGB(x, y, matrix.get(x, y) ? 0xFF000000 : 0xFFFFFFFF);
+                image.setRGB(x, y, bitMatrix.get(x, y) ? 0xFF000000 : 0xFFFFFFFF);
             }
         }
+        if (logoPath == null || "".equals(logoPath)) {
+            return image;
+        }
+        // 插入图片  
+        QRcodeUtil.insertImage(image, logoPath, needCompress);
         return image;
     }
 
-    public static void main(String[] args) {
-        String binary = creatRrCode("https://www.baidu.com/s?ie=UTF-8&wd=java%20%E4%BA%8C%E7%BB%B4%E7%A0%81", 500,500);
-        System.out.println(binary);
-//        int width=500;
-//        int height=500;
-//        String format="png";
-//        String contents="www.baidu.com";
-//        HashMap map=new HashMap();
-//        map.put(EncodeHintType.CHARACTER_SET, "utf-8");
-//        map.put(EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.M);
-//        map.put(EncodeHintType.MARGIN, 0);
-//        try {
-//            BitMatrix bm = new MultiFormatWriter().encode(contents, BarcodeFormat.QR_CODE, width, height);
-//            Path file=new File("D:/img.png").toPath();
-//            MatrixToImageWriter.writeToPath(bm, format, file);
-//        } catch (WriterException e) {
-//            e.printStackTrace();
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//        }
+    /**
+     * 插入LOGO 
+     *
+     * @param source
+     *            二维码图片 
+     * @param logoPath
+     *            LOGO图片地址 
+     * @param needCompress
+     *            是否压缩 
+     * @throws Exception
+     */
+    private static void insertImage(BufferedImage source, String logoPath, boolean needCompress) throws Exception {
+        File file = new File(logoPath);
+        if (!file.exists()) {
+            throw new Exception("logo file not found.");
+        }
+        Image src = ImageIO.read(new File(logoPath));
+        int width = src.getWidth(null);
+        int height = src.getHeight(null);
+        if (needCompress) { // 压缩LOGO  
+            if (width > LOGO_WIDTH) {
+                width = LOGO_WIDTH;
+            }
+            if (height > LOGO_HEIGHT) {
+                height = LOGO_HEIGHT;
+            }
+            Image image = src.getScaledInstance(width, height, Image.SCALE_SMOOTH);
+            BufferedImage tag = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+            Graphics g = tag.getGraphics();
+            g.drawImage(image, 0, 0, null); // 绘制缩小后的图  
+            g.dispose();
+            src = image;
+        }
+        // 插入LOGO  
+        Graphics2D graph = source.createGraphics();
+        int x = (QRCODE_SIZE - width) / 2;
+        int y = (QRCODE_SIZE - height) / 2;
+        graph.drawImage(src, x, y, width, height, null);
+        Shape shape = new RoundRectangle2D.Float(x, y, width, width, 6, 6);
+        graph.setStroke(new BasicStroke(3f));
+        graph.draw(shape);
+        graph.dispose();
     }
+
+    /**
+     * 生成二维码(内嵌LOGO) 
+     * 二维码文件名随机，文件名可能会有重复 
+     *
+     * @param content
+     *            内容 
+     * @param logoPath
+     *            LOGO地址 
+     * @param destPath
+     *            存放目录 
+     * @param needCompress
+     *            是否压缩LOGO 
+     * @throws Exception
+     */
+    public static String encode(String content, String logoPath, String destPath, boolean needCompress) throws Exception {
+        BufferedImage image = QRcodeUtil.createImage(content, logoPath, needCompress);
+        mkdirs(destPath);
+        String fileName = new Random().nextInt(99999999) + "." + FORMAT.toLowerCase();
+        ImageIO.write(image, FORMAT, new File(destPath + "/" + fileName));
+        return fileName;
+    }
+
+    /**
+     * 生成二维码(内嵌LOGO) 
+     * 调用者指定二维码文件名 
+     *
+     * @param content
+     *            内容 
+     * @param logoPath
+     *            LOGO地址 
+     * @param destPath
+     *            存放目录 
+     * @param fileName
+     *            二维码文件名 
+     * @param needCompress
+     *            是否压缩LOGO 
+     * @throws Exception
+     */
+    public static String encode(String content, String logoPath, String destPath, String fileName, boolean needCompress) throws Exception {
+        BufferedImage image = QRcodeUtil.createImage(content, logoPath, needCompress);
+        mkdirs(destPath);
+        fileName = fileName.substring(0, fileName.indexOf(".")>0?fileName.indexOf("."):fileName.length())
+                + "." + FORMAT.toLowerCase();
+        ImageIO.write(image, FORMAT, new File(destPath + "/" + fileName));
+        return fileName;
+    }
+
+    /**
+     * 当文件夹不存在时，mkdirs会自动创建多层目录，区别于mkdir． 
+     * (mkdir如果父目录不存在则会抛出异常) 
+     * @param destPath
+     *            存放目录 
+     */
+    public static void mkdirs(String destPath) {
+        File file = new File(destPath);
+        if (!file.exists() && !file.isDirectory()) {
+            file.mkdirs();
+        }
+    }
+
+    /**
+     * 生成二维码(内嵌LOGO) 
+     *
+     * @param content
+     *            内容 
+     * @param logoPath
+     *            LOGO地址 
+     * @param destPath
+     *            存储地址 
+     * @throws Exception
+     */
+    public static String encode(String content, String logoPath, String destPath) throws Exception {
+        return QRcodeUtil.encode(content, logoPath, destPath, false);
+    }
+
+    /**
+     * 生成二维码 
+     *
+     * @param content
+     *            内容 
+     * @param destPath
+     *            存储地址 
+     * @param needCompress
+     *            是否压缩LOGO 
+     * @throws Exception
+     */
+    public static String encode(String content, String destPath, boolean needCompress) throws Exception {
+        return QRcodeUtil.encode(content, null, destPath, needCompress);
+    }
+
+    /**
+     * 生成二维码 
+     *
+     * @param content
+     *            内容 
+     * @param destPath
+     *            存储地址 
+     * @throws Exception
+     */
+    public static String encode(String content, String destPath) throws Exception {
+        return QRcodeUtil.encode(content, null, destPath, false);
+    }
+
+    /**
+     * 生成二维码(内嵌LOGO) 
+     *
+     * @param content
+     *            内容 
+     * @param logoPath
+     *            LOGO地址 
+     * @param output
+     *            输出流 
+     * @param needCompress
+     *            是否压缩LOGO 
+     * @throws Exception
+     */
+    public static void encode(String content, String logoPath, OutputStream output, boolean needCompress)
+            throws Exception {
+        BufferedImage image = QRcodeUtil.createImage(content, logoPath, needCompress);
+        ImageIO.write(image, FORMAT, output);
+    }
+
+    /**
+     * 生成二维码 
+     *
+     * @param content
+     *            内容 
+     * @param output
+     *            输出流 
+     * @throws Exception
+     */
+    public static void encode(String content, OutputStream output) throws Exception {
+        QRcodeUtil.encode(content, null, output, false);
+    }
+
+    /**
+     * 解析二维码 
+     *
+     * @param file
+     *            二维码图片 
+     * @return
+     * @throws Exception
+     */
+    public static String decode(File file) throws Exception {
+        BufferedImage image;
+        image = ImageIO.read(file);
+        if (image == null) {
+            return null;
+        }
+        BufferedImageLuminanceSource source = new BufferedImageLuminanceSource(image);
+        BinaryBitmap bitmap = new BinaryBitmap(new HybridBinarizer(source));
+        Result result;
+        Hashtable<DecodeHintType, Object> hints = new Hashtable<DecodeHintType, Object>();
+        hints.put(DecodeHintType.CHARACTER_SET, CHARSET);
+        result = new MultiFormatReader().decode(bitmap, hints);
+        String resultStr = result.getText();
+        return resultStr;
+    }
+
+    /**
+     * 解析二维码 
+     *
+     * @param path
+     *            二维码图片地址 
+     * @return
+     * @throws Exception
+     */
+    public static String decode(String path) throws Exception {
+        return QRcodeUtil.decode(new File(path));
+    }
+
+    public static void main(String[] args) throws Exception {
+//        String text = "https://blog.csdn.net/ianly123";
+        String text = "{\"queryParamJson\":{\"omsBillNum\":\"\",\"applyNum\":\"\",\"confirmNum\":\"\",\"timeType\":\"apply_generate_time\",\"minTime\":\"2018-08-25 10:25:10\",\"maxTime\":\"2018-09-25 10:25:10\",\"sortField\":\"apply_generate_time\",\"billStatus\":\"2001\"}}";
+        //不含Logo  
+//        QRcodeUtil.encode(text, null, "F:/", true);
+        //解码
+        String decode = QRcodeUtil.decode("F:/34165474.jpg");
+        Map<String,Object> requestParamMap = CommonUtil.parseJsonParam(decode);
+//        Object obj = requestParamMap.get("queryParamJson");
+//
+        System.out.println(requestParamMap.get("queryParamJson"));
+        //含Logo，不指定二维码图片名  
+        //QRcodeUtil.encode(text, "/Users/ianly/Documents/picture/google-icon.jpg", "/Users/ianly/Documents/picture/", true);
+        //含Logo，指定二维码图片名  
+//        QRcodeUtil.encode(text, "F:/851632560576675855.jpg", "F:/", "qrcode", true);
+    }
+
 }
